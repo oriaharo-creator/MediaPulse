@@ -261,16 +261,16 @@ document.addEventListener('DOMContentLoaded', () => {
             
             let localPath = "";
             
-            // Download via Capacitor HTTP if available
-            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorHttp) {
-                const result = await window.Capacitor.Plugins.CapacitorHttp.downloadFile({
+            // Download via Capacitor Filesystem
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) {
+                const result = await window.Capacitor.Plugins.Filesystem.downloadFile({
                     url: streamUrl,
-                    filePath: filename,
-                    fileDirectory: 'DATA'
+                    path: filename,
+                    directory: 'DATA'
                 });
                 localPath = window.Capacitor.convertFileSrc(result.path);
             } else {
-                // If not running in native container, fallback to mock stream url so it doesn't crash browser tests
+                // If not running in native container, fallback
                 localPath = streamUrl;
             }
 
@@ -288,9 +288,9 @@ document.addEventListener('DOMContentLoaded', () => {
             processNextInQueue();
         } catch (error) {
             console.error(error);
-            item.status = 'failed';
+            item.status = 'Failed: ' + error.message;
             updateQueueUI();
-            setTimeout(() => processNextInQueue(), 1000);
+            setTimeout(() => processNextInQueue(), 2000);
         }
     }
 
