@@ -217,6 +217,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const ytUrl = `https://www.youtube.com/watch?v=${item.id}`;
             const redirectUrl = `https://ytmp3.nu/`;
             
+            // ytmp3 doesn't support pre-filling the URL box via web links.
+            // Best workaround: Automatically copy the link to their clipboard!
+            try {
+                await navigator.clipboard.writeText(ytUrl);
+                alert("YouTube Link copied to clipboard! Just paste it in the box on ytmp3.");
+            } catch (err) {
+                console.log("Clipboard write failed", err);
+            }
+            
             window.open(redirectUrl, '_blank');
 
             item.status = 'opened in browser';
