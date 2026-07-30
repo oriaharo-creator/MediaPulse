@@ -84,7 +84,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function getDownloadUrl(videoId, format, quality) {
         const url = `https://www.youtube.com/watch?v=${videoId}`;
-        for (let instance of COBALT_INSTANCES) {
+        
+        let instancesToTry = [...COBALT_INSTANCES];
+        
+        try {
+            // Dynamically fetch working community instances
+            const instancesRes = await fetch('https://instances.cobalt.best/api/instances');
+            if (instancesRes.ok) {
+                const data = await instancesRes.json();
+                const validInstances = data.filter(i => i.cors === 1 && i.api_online && (i.version.startsWith('10') || i.version === '10.0'));
+                if (validInstances.length > 0) {
+                    instancesToTry = validInstances.slice(0, 5).map(i => 'https://' + i.domain);
+                }
+            }
+        } catch(e) {
+            console.error("Failed to fetch instance list, using fallback array.", e);
+        }
+
+        for (let instance of instancesToTry) {
             try {
                 const res = await fetch(instance, {
                     method: 'POST',
