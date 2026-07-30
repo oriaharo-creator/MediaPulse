@@ -85,29 +85,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function getDownloadUrl(videoId, format, quality) {
         const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-        
         let errorLog = [];
 
-        // STRATEGY 1: Dedicated Vercel Microservice
-        // (Replace this URL with your deployed Vercel URL once you deploy the API)
-        const VERCEL_API_URL = "https://your-mediapulse-api.vercel.app";
-        
-        try {
-            if (VERCEL_API_URL.includes('your-mediapulse-api')) {
-                throw new Error("You need to deploy the API to Vercel and paste the URL here!");
+        for (const instance of COBALT_INSTANCES) {
+            try {
+                // Determine quality string
+                let vQuality = '720';
+                if (quality && quality !== 'Audio') {
+                    vQuality = quality.replace('p', '');
+                }
+
+                const options = {
+                    url: `${instance}/api/json`,
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json' 
+                    },
+                    data: {
+                        url: ytUrl,
+                        isAudioOnly: format === 'mp3',
+                        aFormat: format === 'mp3' ? 'mp3' : 'best',
+                        vQuality: vQuality
+                    }
+                };
+                
+                // Using CapacitorHttp to avoid strict CORS block if running in browser/web-view
+                const res = await Capacitor.Plugins.CapacitorHttp.post(options);
+                
+                if (res.status >= 200 && res.status < 300) {
+                    const data = res.data;
+                    if (data && data.url) {
+                        return data.url;
+                    }
+                } else {
+                    errorLog.push(`${instance}_${res.status}`);
+                }
+            } catch(e) {
+                errorLog.push(`${instance}_Failed`);
             }
-            const res = await fetch(`${VERCEL_API_URL}/api/download?v=${videoId}&format=${format}`);
-            if (res.ok) {
-                const data = await res.json();
-                if (data.url) return data.url;
-            } else {
-                errorLog.push(`Vercel_${res.status}`);
-            }
-        } catch(e) {
-            errorLog.push("Vercel_Failed: " + e.message);
         }
 
-        throw new Error("API Blocked: " + errorLog.join(" | "));
+        throw new Error("All public APIs failed: " + errorLog.join(" | "));
     }
 
     // --- Search Logic ---
