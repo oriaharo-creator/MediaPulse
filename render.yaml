@@ -1,8 +1,0 @@
-services:
-  - type: web
-    name: mediapulse-api
-    env: node
-    buildCommand: npm install
-    startCommand: npm start
-    rootDir: MediaPulse-API
-    plan: free

@@ -84,29 +84,49 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
 
     async function getDownloadUrl(videoId, format, quality) {
-        const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        // STRATEGY: RapidAPI Commercial Proxy
+        // 1. Go to https://rapidapi.com/ytdlfree/api/youtube-mp36/pricing and subscribe to the free tier
+        // 2. Paste your "X-RapidAPI-Key" here:
+        const RAPID_API_KEY = "PASTE_YOUR_API_KEY_HERE";
         
-        let errorLog = [];
-
-        // STRATEGY 1: Dedicated Render Microservice
-        const VERCEL_API_URL = "https://mediapulse-api.onrender.com";
-        
-        try {
-            if (VERCEL_API_URL.includes('your-mediapulse-api')) {
-                throw new Error("You need to deploy the API to Vercel and paste the URL here!");
-            }
-            const res = await fetch(`${VERCEL_API_URL}/api/download?v=${videoId}&format=${format}`);
-            if (res.ok) {
-                const data = await res.json();
-                if (data.url) return data.url;
-            } else {
-                errorLog.push(`Vercel_${res.status}`);
-            }
-        } catch(e) {
-            errorLog.push("Vercel_Failed: " + e.message);
+        if (RAPID_API_KEY === "PASTE_YOUR_API_KEY_HERE") {
+            throw new Error("You must paste your RapidAPI Key into app.js line 91!");
         }
 
-        throw new Error("API Blocked: " + errorLog.join(" | "));
+        const url = `https://youtube-mp36.p.rapidapi.com/dl?id=${videoId}`;
+        const options = {
+            method: 'GET',
+            headers: {
+                'X-RapidAPI-Key': RAPID_API_KEY,
+                'X-RapidAPI-Host': 'youtube-mp36.p.rapidapi.com'
+            }
+        };
+        
+        // Polling loop for processing
+        for (let i = 0; i < 20; i++) {
+            const res = await fetch(url, options);
+            if (!res.ok) {
+                if (res.status === 403) throw new Error("RapidAPI Key invalid or you didn't subscribe to the free tier.");
+                throw new Error("RapidAPI Error: " + res.status);
+            }
+            
+            const data = await res.json();
+            
+            if (data.status === 'ok') {
+                 return data.link || data.url;
+            } else if (data.status === 'fail') {
+                throw new Error("RapidAPI failed to convert this video.");
+            } else if (data.status === 'processing') {
+                // Wait 2 seconds and poll again
+                await new Promise(r => setTimeout(r, 2000));
+            } else {
+                // Fallback if API responds instantly without 'status' field
+                if (data.link) return data.link;
+                if (data.url) return data.url;
+            }
+        }
+        
+        throw new Error("RapidAPI conversion timed out.");
     }
 
     // --- Search Logic ---
