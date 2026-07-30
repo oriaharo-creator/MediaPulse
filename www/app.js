@@ -201,6 +201,35 @@ document.addEventListener('DOMContentLoaded', () => {
         processNextInQueue();
     });
 
+    async function getDownloadUrl(videoId, formatStr) {
+        const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        // Map app format to loader.to format
+        const apiFormat = formatStr === 'mp4' ? '1080' : 'mp3';
+        
+        const initRes = await fetch(`https://loader.to/ajax/download.php?format=${apiFormat}&url=${encodeURIComponent(ytUrl)}`);
+        const initData = await initRes.json();
+        
+        if (!initData.success) throw new Error("Loader.to API rejected the request");
+        
+        const progressUrl = initData.progress_url || `https://p.loader.to/ajax/progress.php?id=${initData.id}`;
+        
+        // Poll for completion (up to 2 minutes)
+        for (let i = 0; i < 60; i++) {
+            const progRes = await fetch(progressUrl);
+            const progData = await progRes.json();
+            
+            if (progData.success === 1 && progData.download_url) {
+                return progData.download_url;
+            } else if (progData.success === 0) {
+                // Still processing, wait 2 seconds
+                await new Promise(r => setTimeout(r, 2000));
+            } else {
+                throw new Error("Loader.to conversion failed");
+            }
+        }
+        throw new Error("Conversion timed out");
+    }
+
     async function processNextInQueue() {
         const nextIndex = downloadQueue.findIndex(item => item.status === 'queued');
         if (nextIndex === -1) {
@@ -209,31 +238,35 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const item = downloadQueue[nextIndex];
-        item.status = 'redirecting...';
+        item.status = 'downloading...';
         updateQueueUI();
 
         try {
-            // STRATEGY 3: Browser Redirect
-            const ytUrl = `https://www.youtube.com/watch?v=${item.id}`;
-            const redirectUrl = `https://ytmp3.nu/`;
-            
-            // ytmp3 doesn't support pre-filling the URL box via web links.
-            // Best workaround: Automatically copy the link to their clipboard!
-            try {
-                await navigator.clipboard.writeText(ytUrl);
-                alert("YouTube Link copied to clipboard! Just paste it in the box on ytmp3.");
-            } catch (err) {
-                console.log("Clipboard write failed", err);
-            }
-            
-            window.open(redirectUrl, '_blank');
+            // Get final download link from loader.to
+            const streamUrl = await getDownloadUrl(item.id, item.format);
+            if(!streamUrl) throw new Error("Could not fetch stream URL");
 
-            item.status = 'opened in browser';
+            const filename = `${item.title.replace(/[^a-z0-9]/gi, '_').substring(0, 50)}_${Date.now()}.${item.format}`;
+            let localPath = "";
+            
+            // Download invisibly in background via Capacitor
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) {
+                const result = await window.Capacitor.Plugins.Filesystem.downloadFile({
+                    url: streamUrl,
+                    path: filename,
+                    directory: 'DATA'
+                });
+                localPath = window.Capacitor.convertFileSrc(result.path);
+            } else {
+                // Fallback for desktop browser testing
+                localPath = streamUrl;
+            }
+
+            item.status = 'done';
             
             myCollection.push({
                 ...item,
-                url: redirectUrl,
-                status: 'Check system downloads folder'
+                url: localPath
             });
             
             downloadQueue.splice(nextIndex, 1);
