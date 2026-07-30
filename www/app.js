@@ -215,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             // STRATEGY 3: Browser Redirect
             const ytUrl = `https://www.youtube.com/watch?v=${item.id}`;
-            const redirectUrl = `https://ssyoutube.com/en175/?url=${encodeURIComponent(ytUrl)}`;
+            const redirectUrl = `https://ytmp3.nu/`;
             
             window.open(redirectUrl, '_blank');
 
