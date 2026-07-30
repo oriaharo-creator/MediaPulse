@@ -45,10 +45,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // 100% reliable YouTube search by directly scraping the HTML
     async function searchYouTube(query) {
         try {
-            const res = await fetch('https://www.youtube.com/results?search_query=' + encodeURIComponent(query), {
+            const options = {
+                url: 'https://www.youtube.com/results?search_query=' + encodeURIComponent(query),
                 headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
-            });
-            const html = await res.text();
+            };
+            const res = await Capacitor.Plugins.CapacitorHttp.get(options);
+            const html = res.data;
             
             // Extract the ytInitialData JSON object from the raw HTML
             const match = html.match(/var ytInitialData = (\{.*?\});/);
@@ -227,17 +229,17 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append('hl', 'en');
             formData.append('q_auto', '0');
             
-            const y2Analyze = await fetch('https://www.y2mate.com/mates/analyzeV2/ajax', {
-                method: 'POST',
+            const y2AnalyzeOptions = {
+                url: 'https://www.y2mate.com/mates/analyzeV2/ajax',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: formData.toString()
-            });
+                data: formData.toString()
+            };
+            const y2Analyze = await Capacitor.Plugins.CapacitorHttp.post(y2AnalyzeOptions);
             
-            if (y2Analyze.ok) {
-                const analyzeData = await y2Analyze.json();
+            if (y2Analyze.status === 200) {
+                const analyzeData = y2Analyze.data;
                 const linkGroup = format === 'mp3' ? analyzeData.links?.mp3 : analyzeData.links?.mp4;
                 if (linkGroup) {
-                    // Pick the highest quality / first available
                     const firstKey = Object.keys(linkGroup)[0];
                     const videoData = linkGroup[firstKey];
                     
@@ -245,14 +247,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     convertForm.append('vid', analyzeData.vid);
                     convertForm.append('k', videoData.k);
                     
-                    const y2Convert = await fetch('https://www.y2mate.com/mates/convertV2/index', {
-                        method: 'POST',
+                    const y2ConvertOptions = {
+                        url: 'https://www.y2mate.com/mates/convertV2/index',
                         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: convertForm.toString()
-                    });
+                        data: convertForm.toString()
+                    };
+                    const y2Convert = await Capacitor.Plugins.CapacitorHttp.post(y2ConvertOptions);
                     
-                    if (y2Convert.ok) {
-                        const convertData = await y2Convert.json();
+                    if (y2Convert.status === 200) {
+                        const convertData = y2Convert.data;
                         if (convertData.dlink) return convertData.dlink;
                     }
                 }
