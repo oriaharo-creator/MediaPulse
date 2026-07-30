@@ -88,182 +88,23 @@ document.addEventListener('DOMContentLoaded', () => {
         
         let errorLog = [];
 
-        // STRATEGY 1: OceanSaver API (Very reliable for mobile/desktop, bypasses standard YouTube blocks)
-        try {
-            const osFormat = format === 'mp3' ? 'mp3' : '720';
-            const res = await fetch(`https://p.oceansaver.in/ajax/download.php?format=${osFormat}&url=${encodeURIComponent(ytUrl)}`);
-            if (res.ok) {
-                const data = await res.json();
-                if (data && data.success && data.id) {
-                    // Poll for completion
-                    for (let i = 0; i < 15; i++) {
-                        await new Promise(r => setTimeout(r, 2000));
-                        const progRes = await fetch(`https://p.oceansaver.in/ajax/progress.php?id=${data.id}`);
-                        const progData = await progRes.json();
-                        if (progData && progData.success && progData.progress === 1000 && progData.download_url) {
-                            return progData.download_url;
-                        }
-                    }
-                }
-            }
-        } catch(e) {
-            errorLog.push("OSaver_Failed");
-        }
-
-        // STRATEGY 2: Dynamic Cobalt Instances
-        let instancesToTry = [...COBALT_INSTANCES];
-        try {
-            const instancesRes = await fetch('https://instances.cobalt.best/api/instances');
-            if (instancesRes.ok) {
-                const data = await instancesRes.json();
-                // Extremely lenient filter
-                const validInstances = data.filter(i => i.cors === 1 && i.api_online);
-                if (validInstances.length > 0) {
-                    instancesToTry = validInstances.slice(0, 8).map(i => 'https://' + i.domain);
-                }
-            }
-        } catch(e) {
-            errorLog.push("DynamicFetch_Failed");
-        }
-
-        for (let instance of instancesToTry) {
-            try {
-                // Try Cobalt v10 endpoint first
-                let res = await fetch(instance, {
-                    method: 'POST',
-                    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        url: ytUrl,
-                        aFormat: format === 'mp3' ? 'mp3' : 'best',
-                        vQuality: quality.replace('p', ''),
-                        isAudioOnly: format === 'mp3'
-                    })
-                });
-                
-                // If 404, it might be a v7 instance, so try /api/json
-                if (res.status === 404) {
-                    res = await fetch(instance + '/api/json', {
-                        method: 'POST',
-                        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            url: ytUrl,
-                            aFormat: format === 'mp3' ? 'mp3' : 'best',
-                            vQuality: quality.replace('p', ''),
-                            isAudioOnly: format === 'mp3'
-                        })
-                    });
-                }
-                
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.url) return data.url;
-                } else {
-                    errorLog.push(`Cobalt_${res.status}`);
-                }
-            } catch (e) {
-                errorLog.push(`Cobalt_Error`);
-            }
-        }
+        // STRATEGY 1: Dedicated Vercel Microservice
+        // (Replace this URL with your deployed Vercel URL once you deploy the API)
+        const VERCEL_API_URL = "https://your-mediapulse-api.vercel.app";
         
-        // STRATEGY 3: Invidious
         try {
-            const res = await fetch(`https://invidious.jing.rocks/api/v1/videos/${videoId}`);
+            if (VERCEL_API_URL.includes('your-mediapulse-api')) {
+                throw new Error("You need to deploy the API to Vercel and paste the URL here!");
+            }
+            const res = await fetch(`${VERCEL_API_URL}/api/download?v=${videoId}&format=${format}`);
             if (res.ok) {
                 const data = await res.json();
-                if (format === 'mp3') {
-                    const audioStream = data.adaptiveFormats.find(f => f.type && f.type.includes('audio'));
-                    if (audioStream) return audioStream.url;
-                } else {
-                    let videoStream = data.formatStreams.find(f => f.resolution && f.resolution.includes(quality));
-                    return videoStream ? videoStream.url : data.formatStreams[0].url;
-                }
+                if (data.url) return data.url;
             } else {
-                errorLog.push(`Invidious_${res.status}`);
+                errorLog.push(`Vercel_${res.status}`);
             }
         } catch(e) {
-            errorLog.push("Invidious_Failed");
-        }
-
-        // STRATEGY 4: Dynamic Piped Instances (YouTube Viewing Tool API)
-        try {
-            const pipedRes = await fetch('https://api.piped.privacydev.net/instances');
-            if (pipedRes.ok) {
-                const instances = await pipedRes.json();
-                // Filter for active API instances
-                const validPiped = instances.filter(i => i.type === 'api' || i.api_url);
-                const pipedApis = validPiped.slice(0, 5).map(i => i.api_url || i.url);
-                
-                for (let apiUrl of pipedApis) {
-                    try {
-                        const streamRes = await fetch(`${apiUrl}/streams/${videoId}`);
-                        if (streamRes.ok) {
-                            const data = await streamRes.json();
-                            if (format === 'mp3' && data.audioStreams && data.audioStreams.length > 0) {
-                                return data.audioStreams[0].url;
-                            } else if (data.videoStreams && data.videoStreams.length > 0) {
-                                // Find a stream with both video and audio, matching quality if possible
-                                let validVideos = data.videoStreams.filter(v => v.videoOnly === false);
-                                if (validVideos.length === 0) validVideos = data.videoStreams;
-                                let targetVideo = validVideos.find(v => v.quality === quality) || validVideos[0];
-                                return targetVideo.url;
-                            }
-                        } else {
-                            errorLog.push(`Piped_${streamRes.status}`);
-                        }
-                    } catch (e) {
-                        errorLog.push("PipedInst_Failed");
-                    }
-                }
-            } else {
-                errorLog.push(`PipedAPI_${pipedRes.status}`);
-            }
-        } catch(e) {
-            errorLog.push("Piped_Failed");
-        }
-
-        // STRATEGY 5: Y2Mate AJAX API (Highly robust backend)
-        try {
-            const formData = new URLSearchParams();
-            formData.append('k_query', ytUrl);
-            formData.append('k_page', 'home');
-            formData.append('hl', 'en');
-            formData.append('q_auto', '0');
-            
-            const y2AnalyzeOptions = {
-                url: 'https://www.y2mate.com/mates/analyzeV2/ajax',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                data: formData.toString()
-            };
-            const y2Analyze = await Capacitor.Plugins.CapacitorHttp.post(y2AnalyzeOptions);
-            
-            if (y2Analyze.status === 200) {
-                const analyzeData = y2Analyze.data;
-                const linkGroup = format === 'mp3' ? analyzeData.links?.mp3 : analyzeData.links?.mp4;
-                if (linkGroup) {
-                    const firstKey = Object.keys(linkGroup)[0];
-                    const videoData = linkGroup[firstKey];
-                    
-                    const convertForm = new URLSearchParams();
-                    convertForm.append('vid', analyzeData.vid);
-                    convertForm.append('k', videoData.k);
-                    
-                    const y2ConvertOptions = {
-                        url: 'https://www.y2mate.com/mates/convertV2/index',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        data: convertForm.toString()
-                    };
-                    const y2Convert = await Capacitor.Plugins.CapacitorHttp.post(y2ConvertOptions);
-                    
-                    if (y2Convert.status === 200) {
-                        const convertData = y2Convert.data;
-                        if (convertData.dlink) return convertData.dlink;
-                    }
-                }
-            } else {
-                errorLog.push(`Y2Mate_${y2Analyze.status}`);
-            }
-        } catch(e) {
-            errorLog.push("Y2Mate_Failed");
+            errorLog.push("Vercel_Failed: " + e.message);
         }
 
         throw new Error("API Blocked: " + errorLog.join(" | "));
