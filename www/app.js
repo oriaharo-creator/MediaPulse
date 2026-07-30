@@ -74,56 +74,96 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error("Could not parse YouTube search results.");
     }
 
-    // Community Cobalt instances for downloading
+    // Fallback known API lists
     const COBALT_INSTANCES = [
         'https://co.eepy.moe',
         'https://cobalt.kwiatektv.me',
-        'https://cobalt.q0.pm',
-        'https://api.cobalt.tools' // Fallback (might require auth)
+        'https://cobalt.q0.pm'
     ];
 
     async function getDownloadUrl(videoId, format, quality) {
-        const url = `https://www.youtube.com/watch?v=${videoId}`;
+        const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
         
-        let instancesToTry = [...COBALT_INSTANCES];
-        
+        let errorLog = [];
+
+        // STRATEGY 1: OceanSaver API (Very reliable for mobile/desktop, bypasses standard YouTube blocks)
         try {
-            // Dynamically fetch working community instances
-            const instancesRes = await fetch('https://instances.cobalt.best/api/instances');
-            if (instancesRes.ok) {
-                const data = await instancesRes.json();
-                const validInstances = data.filter(i => i.cors === 1 && i.api_online && (i.version.startsWith('10') || i.version === '10.0'));
-                if (validInstances.length > 0) {
-                    instancesToTry = validInstances.slice(0, 5).map(i => 'https://' + i.domain);
+            const osFormat = format === 'mp3' ? 'mp3' : '720';
+            const res = await fetch(`https://p.oceansaver.in/ajax/download.php?format=${osFormat}&url=${encodeURIComponent(ytUrl)}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.success && data.id) {
+                    // Poll for completion
+                    for (let i = 0; i < 15; i++) {
+                        await new Promise(r => setTimeout(r, 2000));
+                        const progRes = await fetch(`https://p.oceansaver.in/ajax/progress.php?id=${data.id}`);
+                        const progData = await progRes.json();
+                        if (progData && progData.success && progData.progress === 1000 && progData.download_url) {
+                            return progData.download_url;
+                        }
+                    }
                 }
             }
         } catch(e) {
-            console.error("Failed to fetch instance list, using fallback array.", e);
+            errorLog.push("OSaver_Failed");
+        }
+
+        // STRATEGY 2: Dynamic Cobalt Instances
+        let instancesToTry = [...COBALT_INSTANCES];
+        try {
+            const instancesRes = await fetch('https://instances.cobalt.best/api/instances');
+            if (instancesRes.ok) {
+                const data = await instancesRes.json();
+                // Extremely lenient filter
+                const validInstances = data.filter(i => i.cors === 1 && i.api_online);
+                if (validInstances.length > 0) {
+                    instancesToTry = validInstances.slice(0, 8).map(i => 'https://' + i.domain);
+                }
+            }
+        } catch(e) {
+            errorLog.push("DynamicFetch_Failed");
         }
 
         for (let instance of instancesToTry) {
             try {
-                const res = await fetch(instance, {
+                // Try Cobalt v10 endpoint first
+                let res = await fetch(instance, {
                     method: 'POST',
                     headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        url: url,
+                        url: ytUrl,
                         aFormat: format === 'mp3' ? 'mp3' : 'best',
                         vQuality: quality.replace('p', ''),
                         isAudioOnly: format === 'mp3'
                     })
                 });
                 
+                // If 404, it might be a v7 instance, so try /api/json
+                if (res.status === 404) {
+                    res = await fetch(instance + '/api/json', {
+                        method: 'POST',
+                        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            url: ytUrl,
+                            aFormat: format === 'mp3' ? 'mp3' : 'best',
+                            vQuality: quality.replace('p', ''),
+                            isAudioOnly: format === 'mp3'
+                        })
+                    });
+                }
+                
                 if (res.ok) {
                     const data = await res.json();
                     if (data.url) return data.url;
+                } else {
+                    errorLog.push(`Cobalt_${res.status}`);
                 }
             } catch (e) {
-                console.error(`Cobalt instance ${instance} failed`, e);
+                errorLog.push(`Cobalt_Error`);
             }
         }
         
-        // Final fallback: Try Invidious if Cobalt is completely down
+        // STRATEGY 3: Invidious
         try {
             const res = await fetch(`https://invidious.jing.rocks/api/v1/videos/${videoId}`);
             const data = await res.json();
@@ -134,10 +174,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 return videoStream ? videoStream.url : data.formatStreams[0].url;
             }
         } catch(e) {
-            console.error("Invidious fallback failed", e);
+            errorLog.push("Invidious_Failed");
         }
 
-        throw new Error("All download APIs failed. Check internet connection.");
+        throw new Error("API Blocked: " + errorLog.join(" | "));
     }
 
     // --- Search Logic ---

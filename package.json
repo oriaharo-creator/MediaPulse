@@ -12,7 +12,9 @@
   "dependencies": {
     "@capacitor/core": "^8.4.2",
     "@capacitor/filesystem": "latest",
-    "@capacitor/ios": "^8.4.2"
+    "@capacitor/ios": "^8.4.2",
+    "@distube/ytdl-core": "^4.16.12",
+    "esbuild": "^0.28.1"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.4.2"
