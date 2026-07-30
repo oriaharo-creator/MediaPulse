@@ -88,9 +88,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         let errorLog = [];
 
-        // STRATEGY 1: Dedicated Vercel Microservice
-        // (Replace this URL with your deployed Vercel URL once you deploy the API)
-        const VERCEL_API_URL = "https://your-mediapulse-api.vercel.app";
+        // STRATEGY 1: Dedicated Render Microservice
+        const VERCEL_API_URL = "https://mediapulse-api.onrender.com";
         
         try {
             if (VERCEL_API_URL.includes('your-mediapulse-api')) {
