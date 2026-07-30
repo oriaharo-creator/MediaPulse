@@ -1,0 +1,8 @@
+{
+  "name": "MediaPulse",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "custom",
+  "id": "eafdbd9f"
+}
