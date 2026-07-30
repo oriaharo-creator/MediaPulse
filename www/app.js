@@ -166,15 +166,101 @@ document.addEventListener('DOMContentLoaded', () => {
         // STRATEGY 3: Invidious
         try {
             const res = await fetch(`https://invidious.jing.rocks/api/v1/videos/${videoId}`);
-            const data = await res.json();
-            if (format === 'mp3') {
-                return data.adaptiveFormats.find(f => f.type.includes('audio'))?.url;
+            if (res.ok) {
+                const data = await res.json();
+                if (format === 'mp3') {
+                    const audioStream = data.adaptiveFormats.find(f => f.type && f.type.includes('audio'));
+                    if (audioStream) return audioStream.url;
+                } else {
+                    let videoStream = data.formatStreams.find(f => f.resolution && f.resolution.includes(quality));
+                    return videoStream ? videoStream.url : data.formatStreams[0].url;
+                }
             } else {
-                let videoStream = data.formatStreams.find(f => f.resolution && f.resolution.includes(quality));
-                return videoStream ? videoStream.url : data.formatStreams[0].url;
+                errorLog.push(`Invidious_${res.status}`);
             }
         } catch(e) {
             errorLog.push("Invidious_Failed");
+        }
+
+        // STRATEGY 4: Dynamic Piped Instances (YouTube Viewing Tool API)
+        try {
+            const pipedRes = await fetch('https://api.piped.privacydev.net/instances');
+            if (pipedRes.ok) {
+                const instances = await pipedRes.json();
+                // Filter for active API instances
+                const validPiped = instances.filter(i => i.type === 'api' || i.api_url);
+                const pipedApis = validPiped.slice(0, 5).map(i => i.api_url || i.url);
+                
+                for (let apiUrl of pipedApis) {
+                    try {
+                        const streamRes = await fetch(`${apiUrl}/streams/${videoId}`);
+                        if (streamRes.ok) {
+                            const data = await streamRes.json();
+                            if (format === 'mp3' && data.audioStreams && data.audioStreams.length > 0) {
+                                return data.audioStreams[0].url;
+                            } else if (data.videoStreams && data.videoStreams.length > 0) {
+                                // Find a stream with both video and audio, matching quality if possible
+                                let validVideos = data.videoStreams.filter(v => v.videoOnly === false);
+                                if (validVideos.length === 0) validVideos = data.videoStreams;
+                                let targetVideo = validVideos.find(v => v.quality === quality) || validVideos[0];
+                                return targetVideo.url;
+                            }
+                        } else {
+                            errorLog.push(`Piped_${streamRes.status}`);
+                        }
+                    } catch (e) {
+                        errorLog.push("PipedInst_Failed");
+                    }
+                }
+            } else {
+                errorLog.push(`PipedAPI_${pipedRes.status}`);
+            }
+        } catch(e) {
+            errorLog.push("Piped_Failed");
+        }
+
+        // STRATEGY 5: Y2Mate AJAX API (Highly robust backend)
+        try {
+            const formData = new URLSearchParams();
+            formData.append('k_query', ytUrl);
+            formData.append('k_page', 'home');
+            formData.append('hl', 'en');
+            formData.append('q_auto', '0');
+            
+            const y2Analyze = await fetch('https://www.y2mate.com/mates/analyzeV2/ajax', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData.toString()
+            });
+            
+            if (y2Analyze.ok) {
+                const analyzeData = await y2Analyze.json();
+                const linkGroup = format === 'mp3' ? analyzeData.links?.mp3 : analyzeData.links?.mp4;
+                if (linkGroup) {
+                    // Pick the highest quality / first available
+                    const firstKey = Object.keys(linkGroup)[0];
+                    const videoData = linkGroup[firstKey];
+                    
+                    const convertForm = new URLSearchParams();
+                    convertForm.append('vid', analyzeData.vid);
+                    convertForm.append('k', videoData.k);
+                    
+                    const y2Convert = await fetch('https://www.y2mate.com/mates/convertV2/index', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: convertForm.toString()
+                    });
+                    
+                    if (y2Convert.ok) {
+                        const convertData = await y2Convert.json();
+                        if (convertData.dlink) return convertData.dlink;
+                    }
+                }
+            } else {
+                errorLog.push(`Y2Mate_${y2Analyze.status}`);
+            }
+        } catch(e) {
+            errorLog.push("Y2Mate_Failed");
         }
 
         throw new Error("API Blocked: " + errorLog.join(" | "));
