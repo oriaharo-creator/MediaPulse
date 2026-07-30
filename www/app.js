@@ -5,11 +5,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     navLinks.forEach(link => {
         link.addEventListener('click', () => {
-            // Remove active classes
             navLinks.forEach(n => n.classList.remove('active'));
             views.forEach(v => v.classList.remove('active'));
-
-            // Add active class to clicked
             link.classList.add('active');
             const targetId = link.getAttribute('data-target');
             document.getElementById(targetId).classList.add('active');
@@ -43,23 +40,60 @@ document.addEventListener('DOMContentLoaded', () => {
     const mediaPlayer = document.getElementById('media-player');
     const nowPlayingTitle = document.getElementById('now-playing-title');
 
-    // --- Search Logic (Mocked YouTube API) ---
-    searchBtn.addEventListener('click', () => {
+    // --- APIs ---
+    const INVIDIOUS_INSTANCES = [
+        'https://invidious.jing.rocks',
+        'https://vid.puffyan.us',
+        'https://invidious.nerdvpn.de'
+    ];
+
+    async function fetchWithFallback(path) {
+        for (let instance of INVIDIOUS_INSTANCES) {
+            try {
+                const url = instance + path;
+                console.log("Trying API: ", url);
+                const response = await Capacitor.Plugins.CapacitorHttp.get({ url });
+                if (response.status === 200 && response.data) return response.data;
+            } catch (e) {
+                console.error(`Failed fetching from ${instance}`, e);
+            }
+        }
+        throw new Error('All APIs failed. Check your internet connection.');
+    }
+
+    function formatTime(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+
+    // --- Search Logic ---
+    searchBtn.addEventListener('click', async () => {
         const query = searchInput.value.trim();
         if (!query) return;
 
         resultsList.innerHTML = '<div class="empty-state">Searching YouTube...</div>';
         
-        // Simulate API call
-        setTimeout(() => {
-            const mockResults = [
-                { id: 'dQw4w9WgXcQ', title: `Result for "${query}" - Official Video`, duration: '3:32', thumb: 'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg' },
-                { id: '3JZ_D3ELwOQ', title: `Top 10 related to "${query}"`, duration: '10:15', thumb: 'https://img.youtube.com/vi/3JZ_D3ELwOQ/mqdefault.jpg' },
-                { id: 'L_jWHffIx5E', title: `${query} Full Album Stream`, duration: '45:20', thumb: 'https://img.youtube.com/vi/L_jWHffIx5E/mqdefault.jpg' },
-                { id: 'kJQP7kiw5Fk', title: `How to learn ${query} fast`, duration: '8:05', thumb: 'https://img.youtube.com/vi/kJQP7kiw5Fk/mqdefault.jpg' }
-            ];
-            renderResults(mockResults);
-        }, 1000);
+        try {
+            const results = await fetchWithFallback(`/api/v1/search?q=${encodeURIComponent(query)}&type=video`);
+            
+            if (!results || results.length === 0) {
+                resultsList.innerHTML = '<div class="empty-state">No results found.</div>';
+                return;
+            }
+            
+            const formattedResults = results.map(item => ({
+                id: item.videoId,
+                title: item.title,
+                duration: formatTime(item.lengthSeconds),
+                thumb: item.videoThumbnails ? item.videoThumbnails.find(t => t.quality === 'medium')?.url || item.videoThumbnails[0].url : ''
+            }));
+            
+            renderResults(formattedResults);
+        } catch (error) {
+            console.error(error);
+            resultsList.innerHTML = `<div class="empty-state" style="color:red">Search failed: ${error.message}</div>`;
+        }
     });
 
     function renderResults(results) {
@@ -76,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="card-title" title="${video.title}">${video.title}</div>
                     <div class="card-meta">YouTube Video</div>
                     <div class="card-actions">
-                        <button class="download-action" onclick="openDownloadModal('${video.id}', '${video.title}', '${video.thumb}')">Download</button>
+                        <button class="download-action" onclick="openDownloadModal('${video.id}', '${video.title.replace(/'/g, "\\'")}', '${video.thumb}')">Download</button>
                     </div>
                 </div>
             `;
@@ -113,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ...currentVideoToQueue,
             format,
             quality,
-            status: 'queued' // queued, downloading, done
+            status: 'queued'
         });
         
         updateQueueUI();
@@ -152,15 +186,13 @@ document.addEventListener('DOMContentLoaded', () => {
         updateQueueUI();
     };
 
-    // --- Mock Batch Processing (yt-dlp placeholder) ---
+    // --- Real Downloading Logic ---
     processQueueBtn.addEventListener('click', () => {
         if (downloadQueue.length === 0) return;
-        
-        // Mock processing first item
         processNextInQueue();
     });
 
-    function processNextInQueue() {
+    async function processNextInQueue() {
         const nextIndex = downloadQueue.findIndex(item => item.status === 'queued');
         if (nextIndex === -1) {
             alert('Queue processing complete!');
@@ -171,14 +203,36 @@ document.addEventListener('DOMContentLoaded', () => {
         item.status = 'downloading...';
         updateQueueUI();
 
-        // Simulate yt-dlp download delay
-        setTimeout(() => {
+        try {
+            const videoData = await fetchWithFallback(`/api/v1/videos/${item.id}`);
+            
+            let streamUrl = '';
+            if (item.format === 'mp3') {
+                const audioStream = videoData.adaptiveFormats.find(f => f.type.includes('audio'));
+                if (!audioStream) throw new Error("No audio stream found");
+                streamUrl = audioStream.url;
+            } else {
+                let videoStream = videoData.formatStreams.find(f => f.resolution && f.resolution.includes(item.quality));
+                if (!videoStream && videoData.formatStreams.length > 0) {
+                    videoStream = videoData.formatStreams[0]; // fallback
+                }
+                if (!videoStream) throw new Error("No video stream found");
+                streamUrl = videoStream.url;
+            }
+
+            const filename = `${item.title.replace(/[^a-z0-9]/gi, '_').substring(0, 50)}_${Date.now()}.${item.format}`;
+            
+            const result = await Capacitor.Plugins.CapacitorHttp.downloadFile({
+                url: streamUrl,
+                filePath: filename,
+                fileDirectory: 'DATA'
+            });
+
             item.status = 'done';
             
-            // Move to collection
             myCollection.push({
                 ...item,
-                url: item.format === 'mp4' ? 'https://www.w3schools.com/html/mov_bbb.mp4' : 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' // Mock local file URL
+                url: window.Capacitor.convertFileSrc(result.path)
             });
             
             downloadQueue.splice(nextIndex, 1);
@@ -186,7 +240,12 @@ document.addEventListener('DOMContentLoaded', () => {
             updateCollectionUI();
             
             processNextInQueue();
-        }, 2000);
+        } catch (error) {
+            console.error(error);
+            item.status = 'failed';
+            updateQueueUI();
+            setTimeout(() => processNextInQueue(), 1000);
+        }
     }
 
     // --- File Manager & Local Upload ---
@@ -240,7 +299,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
         
-        // Switch to files view
         navLinks.forEach(n => n.classList.remove('active'));
         views.forEach(v => v.classList.remove('active'));
         document.querySelector('[data-target="files-view"]').classList.add('active');

@@ -1,5 +1,10 @@
 {
   "appId": "com.yourname.mediapulse",
   "appName": "MediaPulse",
-  "webDir": "www"
+  "webDir": "www",
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
 }
