@@ -379,21 +379,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 finalUrl = window.Capacitor.convertFileSrc(uriResult.uri);
             }
             
-            // Create a hidden video element to trigger iOS's native fullscreen AVPlayer
             const video = document.createElement('video');
             video.src = finalUrl;
             video.controls = true;
-            video.style.display = 'none'; // Keep it off the DOM to prevent UI compositing stutter
-            video.playsInline = false;    // This forces iOS to intercept and open the native AVPlayer UI
+            video.style.display = 'none'; 
+            video.playsInline = false;    
             document.body.appendChild(video);
             
+            const debugLog = [];
+            const addLog = (msg) => { debugLog.push(msg); console.log("Video Debug:", msg); };
+            
+            video.addEventListener('loadstart', () => addLog('loadstart'));
+            video.addEventListener('loadedmetadata', () => addLog(`metadata(${video.videoWidth}x${video.videoHeight}, ${video.duration}s)`));
+            video.addEventListener('loadeddata', () => addLog('loadeddata'));
+            video.addEventListener('playing', () => addLog('playing'));
+            video.addEventListener('stalled', () => addLog('stalled'));
+            video.addEventListener('waiting', () => addLog('waiting'));
+            video.addEventListener('suspend', () => addLog('suspend'));
+            
             video.onended = () => {
+                alert(`Video Ended! File Duration: ${video.duration}s. Debug Log: ` + debugLog.join(" -> "));
                 video.remove();
             };
             
             video.onerror = () => {
-                console.error("Video error code:", video.error ? video.error.code : 'unknown');
-                alert("Playback failed. Please ensure the file is not corrupted.");
+                const err = video.error;
+                let msg = `Video Error Code: ${err ? err.code : 'unknown'}. Message: ${err ? err.message : 'none'}.`;
+                alert(msg + `\nDebug Log: ` + debugLog.join(" -> "));
                 video.remove();
             };
             
