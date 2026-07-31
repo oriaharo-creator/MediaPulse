@@ -279,13 +279,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     const { done, value } = await reader.read();
                     if (done) break;
                     
-                    // Convert Uint8Array chunk to base64
-                    let binary = '';
-                    const len = value.byteLength;
-                    for (let i = 0; i < len; i++) {
-                        binary += String.fromCharCode(value[i]);
-                    }
-                    const b64Chunk = window.btoa(binary);
+                    // Convert Uint8Array chunk to base64 natively using WebKit FileReader
+                    const blob = new Blob([value]);
+                    const b64Chunk = await new Promise((resolve) => {
+                        const r = new FileReader();
+                        r.onload = () => resolve(r.result.split(',')[1]);
+                        r.readAsDataURL(blob);
+                    });
                     
                     if (firstChunk) {
                         await window.Capacitor.Plugins.Filesystem.writeFile({
