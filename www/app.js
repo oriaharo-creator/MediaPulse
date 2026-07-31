@@ -208,6 +208,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    function updateQueueItemProgress(id, progressText, percent) {
+        const item = downloadQueue.find(i => i.id === id);
+        if (item) {
+            item.progressText = progressText;
+            item.progressPercent = percent;
+        }
+        const card = document.getElementById(`queue-card-${id}`);
+        if (card) {
+            const statusEl = card.querySelector('.status-text');
+            if (statusEl) statusEl.textContent = progressText;
+            
+            const barEl = card.querySelector('.progress-bar');
+            if (barEl) {
+                barEl.classList.remove('indeterminate');
+                barEl.style.width = percent + '%';
+            }
+        }
+    }
+
     function updateQueueUI() {
         localStorage.setItem('downloadQueue', JSON.stringify(downloadQueue));
         queueBadge.textContent = downloadQueue.length;
@@ -223,12 +242,16 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadQueue.forEach((item, index) => {
             const card = document.createElement('div');
             const isProcessing = item.status === 'downloading...';
+            const progressPercent = item.progressPercent || 0;
+            const progressText = item.progressText || item.status;
+
             const progressHtml = isProcessing ? `
                 <div class="progress-bar-container">
-                    <div class="progress-bar indeterminate"></div>
+                    <div class="progress-bar ${item.progressPercent ? '' : 'indeterminate'}" style="width: ${item.progressPercent ? item.progressPercent + '%' : '50%'}"></div>
                 </div>
             ` : '';
 
+            card.id = `queue-card-${item.id}`;
             card.className = 'card queue-card ' + (isProcessing ? 'active-task' : '');
             card.innerHTML = `
                 <div class="card-thumb queue-thumb">
@@ -239,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="card-title">${item.title}</div>
                     <div class="card-meta queue-meta">
                         <span><span class="badge format-${item.format}">${item.format.toUpperCase()}</span> ${item.quality}</span>
-                        <span class="status-text ${isProcessing ? 'pulse-text' : ''}">${item.status}</span>
+                        <span class="status-text ${isProcessing ? 'pulse-text' : ''}">${progressText}</span>
                     </div>
                     ${progressHtml}
                     <div class="card-actions queue-actions">
@@ -260,7 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Real Downloading Logic ---
 
-    async function getDownloadUrl(videoId, formatStr, qualityStr) {
+    async function getDownloadUrl(videoId, formatStr, qualityStr, onProgress) {
         const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
         
         let apiFormat = 'mp3';
@@ -282,9 +305,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const progData = await progRes.json();
             
             if (progData.success === 1 && progData.download_url) {
+                if (onProgress) onProgress('converting... 100%', 100);
                 return progData.download_url;
             } else if (progData.success === 0) {
-                // Still processing, wait 2 seconds
+                // Still processing, check progress
+                if (progData.progress && onProgress) {
+                    let val = parseInt(progData.progress, 10);
+                    if (val > 100) val = Math.floor(val / 10);
+                    onProgress(`converting... ${val}%`, val);
+                }
                 await new Promise(r => setTimeout(r, 2000));
             } else {
                 throw new Error("Loader.to conversion failed");
@@ -305,7 +334,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // Get final download link from loader.to
-            const streamUrl = await getDownloadUrl(item.id, item.format, item.quality);
+            const streamUrl = await getDownloadUrl(item.id, item.format, item.quality, (text, pct) => {
+                updateQueueItemProgress(item.id, text, pct);
+            });
             if(!streamUrl) throw new Error("Could not fetch stream URL");
 
             const filename = `${item.title.replace(/[^a-z0-9]/gi, '_').substring(0, 50)}_${Date.now()}.${item.format}`;
@@ -313,11 +344,27 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Download invisibly in background via Capacitor
             if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) {
+                let listener = null;
+                if (window.Capacitor.Plugins.Filesystem.addListener) {
+                    listener = await window.Capacitor.Plugins.Filesystem.addListener('progress', (progress) => {
+                        if (progress.contentLength > 0) {
+                            const pct = Math.floor((progress.bytes / progress.contentLength) * 100);
+                            updateQueueItemProgress(item.id, `downloading... ${pct}%`, pct);
+                        }
+                    });
+                }
+
                 const result = await window.Capacitor.Plugins.Filesystem.downloadFile({
                     url: streamUrl,
                     path: filename,
-                    directory: 'DATA'
+                    directory: 'DATA',
+                    progress: true
                 });
+                
+                if (listener && listener.remove) {
+                    listener.remove();
+                }
+                
                 // Only store filename, as native iOS absolute paths change on app updates
                 localPath = filename;
             } else {
