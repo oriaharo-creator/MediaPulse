@@ -295,11 +295,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                         firstChunk = false;
                     } else {
-                        await window.Capacitor.Plugins.Filesystem.writeFile({
+                        await window.Capacitor.Plugins.Filesystem.appendFile({
                             directory: 'DATA',
                             path: filename,
-                            data: b64Chunk,
-                            append: true
+                            data: b64Chunk
                         });
                     }
                 }
