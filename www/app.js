@@ -93,20 +93,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const query = searchInput.value.trim();
         if (!query) return;
 
-        resultsList.innerHTML = '<div class="empty-state">Searching YouTube...</div>';
+        resultsList.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>Searching YouTube...</p></div>';
         
         try {
             const results = await searchYouTube(query);
             
             if (!results || results.length === 0) {
-                resultsList.innerHTML = '<div class="empty-state">No results found.</div>';
+                resultsList.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><p>No results found.</p></div>';
                 return;
             }
             
             renderResults(results);
         } catch (error) {
             console.error(error);
-            resultsList.innerHTML = `<div class="empty-state" style="color:red">Search failed: ${error.message}</div>`;
+            resultsList.innerHTML = `<div class="empty-state" style="color:var(--accent-violet)"><div class="empty-icon">⚠️</div><p>Search failed: ${error.message}</p></div>`;
         }
     });
 
@@ -172,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('downloadQueue', JSON.stringify(downloadQueue));
         queueBadge.textContent = downloadQueue.length;
         if (downloadQueue.length === 0) {
-            queueList.innerHTML = '<div class="empty-state">Queue is empty.</div>';
+            queueList.innerHTML = '<div class="empty-state"><div class="empty-icon">📥</div><p>Queue is empty</p></div>';
             return;
         }
 
@@ -293,7 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateCollectionUI() {
         localStorage.setItem('myCollection', JSON.stringify(myCollection));
         if (myCollection.length === 0) {
-            filesList.innerHTML = '<div class="empty-state">No downloaded files yet.</div>';
+            filesList.innerHTML = '<div class="empty-state"><div class="empty-icon">🎵</div><p>No media downloaded yet</p></div>';
             return;
         }
 
