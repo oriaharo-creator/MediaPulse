@@ -1,5 +1,3 @@
-import { CapacitorVideoPlayer } from 'capacitor-video-player';
-
 document.addEventListener('DOMContentLoaded', () => {
     // --- Navigation Logic ---
     const navLinks = document.querySelectorAll('.nav-links li');
@@ -352,33 +350,43 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCollectionUI();
     });
 
-    // --- Native Video Player ---
+    // --- Video Player (Blob URL approach) ---
     window.playMedia = async function(index) {
         const item = myCollection[index];
         let playUrl = item.url;
         
-        // Dynamically resolve filename to full local path on iOS
-        if (playUrl && !playUrl.startsWith('http') && !playUrl.startsWith('blob:')) {
-            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) {
-                const res = await window.Capacitor.Plugins.Filesystem.getUri({ directory: 'DATA', path: playUrl });
-                playUrl = res.uri; // Send raw file:// URI to native player
-            }
-        }
-
-        if (CapacitorVideoPlayer) {
-            try {
-                await CapacitorVideoPlayer.initPlayer({
-                    mode: 'fullscreen',
-                    url: playUrl,
-                    title: item.title
-                });
-            } catch (err) {
-                console.error("Video player error:", err);
-                alert("Could not play video natively.");
-            }
-        } else {
-            // Fallback for web
-            alert("Native player not available. URL: " + playUrl);
+        try {
+            // Read file into base64
+            const fileData = await window.Capacitor.Plugins.Filesystem.readFile({
+                directory: 'DATA',
+                path: playUrl
+            });
+            
+            // Convert base64 to Blob URL
+            const res = await fetch(`data:video/mp4;base64,${fileData.data}`);
+            const blob = await res.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            
+            // Create a video element and play it (iOS will auto-fullscreen it)
+            const video = document.createElement('video');
+            video.src = blobUrl;
+            video.controls = true;
+            video.style.display = 'none'; // Hide it from the DOM
+            document.body.appendChild(video);
+            
+            video.onended = () => {
+                URL.revokeObjectURL(blobUrl);
+                video.remove();
+            };
+            
+            video.play().catch(err => {
+                console.error(err);
+                alert("Playback failed.");
+            });
+            
+        } catch (err) {
+            console.error("Video player error:", err);
+            alert("Could not play video. Error: " + err.message);
         }
     };
 });

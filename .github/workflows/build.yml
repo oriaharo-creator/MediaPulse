@@ -10,7 +10,6 @@ jobs:
           node-version: '22'
       - run: rm -rf node_modules
       - run: npm install
-      - run: npm run build
       - run: npx cap sync ios
       - name: Build unsigned IPA
         run: |
