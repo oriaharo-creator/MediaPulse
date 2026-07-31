@@ -19,7 +19,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentVideoToQueue = null;
     
     setTimeout(() => {
-        if(downloadQueue.length > 0) updateQueueUI();
+        if(downloadQueue.length > 0) {
+            // Reset any downloads that were interrupted during the last session
+            downloadQueue.forEach(item => {
+                if (item.status === 'downloading...') item.status = 'queued';
+            });
+            updateQueueUI();
+            
+            // Auto-process queue on boot up
+            processNextInQueue();
+        }
         if(myCollection.length > 0) updateCollectionUI();
     }, 100);
 
@@ -228,8 +237,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (progData.success === 1 && progData.download_url) {
                 return progData.download_url;
             } else if (progData.success === 0) {
-                // Still processing, wait 2 seconds
-                await new Promise(r => setTimeout(r, 2000));
+                // Still processing, wait 15 seconds to avoid rate limits
+                await new Promise(r => setTimeout(r, 15000));
             } else {
                 throw new Error("Loader.to conversion failed");
             }
