@@ -87,18 +87,6 @@
             </ul>
         </nav>
 
-        <!-- Video Player Modal -->
-        <div id="player-modal" class="modal hidden">
-            <div class="modal-content glass-panel player-panel">
-                <button class="close-btn" id="close-player">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-                <div class="player-container">
-                    <video id="media-player" controls playsinline></video>
-                </div>
-                <h3 id="now-playing-title">Video Title</h3>
-            </div>
-        </div>
 
         <!-- Download Options Modal -->
         <div id="download-modal" class="modal hidden">
@@ -117,6 +105,7 @@
                 <div class="form-group" id="quality-group">
                     <label>Quality</label>
                     <select id="quality-select">
+                        <option value="1080">1080p</option>
                         <option value="720">720p (HD)</option>
                         <option value="480">480p</option>
                         <option value="360">360p</option>

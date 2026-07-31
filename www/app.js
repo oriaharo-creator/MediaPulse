@@ -40,10 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const filesList = document.getElementById('files-list');
     const localUpload = document.getElementById('local-upload');
 
-    const playerModal = document.getElementById('player-modal');
-    const closePlayer = document.getElementById('close-player');
-    const mediaPlayer = document.getElementById('media-player');
-    const nowPlayingTitle = document.getElementById('now-playing-title');
+
 
     // --- APIs ---
     
@@ -353,28 +350,33 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCollectionUI();
     });
 
-    // --- Media Player Modal ---
+    // --- Native Video Player ---
     window.playMedia = async function(index) {
         const item = myCollection[index];
         let playUrl = item.url;
         
         // Dynamically resolve filename to full local path on iOS
-        if (playUrl && !playUrl.startsWith('http') && !playUrl.startsWith('capacitor://') && !playUrl.startsWith('blob:')) {
+        if (playUrl && !playUrl.startsWith('http') && !playUrl.startsWith('blob:')) {
             if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) {
                 const res = await window.Capacitor.Plugins.Filesystem.getUri({ directory: 'DATA', path: playUrl });
-                playUrl = window.Capacitor.convertFileSrc(res.uri);
+                playUrl = res.uri; // Send raw file:// URI to native player
             }
         }
 
-        nowPlayingTitle.textContent = item.title;
-        mediaPlayer.src = playUrl;
-        playerModal.classList.remove('hidden');
-        mediaPlayer.play();
+        if (window.Capacitor && window.Capacitor.Plugins.CapacitorVideoPlayer) {
+            try {
+                await window.Capacitor.Plugins.CapacitorVideoPlayer.initPlayer({
+                    mode: 'fullscreen',
+                    url: playUrl,
+                    title: item.title
+                });
+            } catch (err) {
+                console.error("Video player error:", err);
+                alert("Could not play video natively.");
+            }
+        } else {
+            // Fallback for web
+            alert("Native player not available. URL: " + playUrl);
+        }
     };
-
-    closePlayer.addEventListener('click', () => {
-        mediaPlayer.pause();
-        mediaPlayer.src = '';
-        playerModal.classList.add('hidden');
-    });
 });
