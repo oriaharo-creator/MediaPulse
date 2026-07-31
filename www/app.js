@@ -1,3 +1,5 @@
+import { CapacitorVideoPlayer } from 'capacitor-video-player';
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- Navigation Logic ---
     const navLinks = document.querySelectorAll('.nav-links li');
@@ -363,9 +365,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        if (window.Capacitor && window.Capacitor.Plugins.CapacitorVideoPlayer) {
+        if (CapacitorVideoPlayer) {
             try {
-                await window.Capacitor.Plugins.CapacitorVideoPlayer.initPlayer({
+                await CapacitorVideoPlayer.initPlayer({
                     mode: 'fullscreen',
                     url: playUrl,
                     title: item.title
