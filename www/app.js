@@ -362,64 +362,46 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCollectionUI();
     });
 
-    // --- Video Player (Blob URL approach) ---
+    // --- Video Player (Native Scheme + Fullscreen Fallback) ---
     window.playMedia = async function(index) {
         const item = myCollection[index];
         let playUrl = item.url;
-        let step = 'init';
         
         try {
-            step = 'readFile';
-            const fileData = await window.Capacitor.Plugins.Filesystem.readFile({
-                directory: 'DATA',
-                path: playUrl
-            });
+            let finalUrl = playUrl;
             
-            step = 'base64 decode';
-            // Convert base64 to Blob directly in JS to bypass WebKit fetch limits
-            const b64Data = fileData.data;
-            const byteCharacters = atob(b64Data);
-            const byteArrays = [];
-            
-            for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-                const slice = byteCharacters.slice(offset, offset + 512);
-                const byteNumbers = new Array(slice.length);
-                for (let i = 0; i < slice.length; i++) {
-                    byteNumbers[i] = slice.charCodeAt(i);
-                }
-                const byteArray = new Uint8Array(byteNumbers);
-                byteArrays.push(byteArray);
+            // If it's a locally downloaded file, get its Capacitor URI
+            if (playUrl && !playUrl.startsWith('http') && !playUrl.startsWith('blob:')) {
+                const uriResult = await window.Capacitor.Plugins.Filesystem.getUri({
+                    directory: 'DATA',
+                    path: playUrl
+                });
+                finalUrl = window.Capacitor.convertFileSrc(uriResult.uri);
             }
             
-            step = 'blob()';
-            const blob = new Blob(byteArrays, { type: 'video/mp4' });
-            
-            step = 'createObjectURL';
-            const blobUrl = URL.createObjectURL(blob);
-            
-            step = 'video DOM setup';
+            // Create a hidden video element to trigger iOS's native fullscreen AVPlayer
             const video = document.createElement('video');
-            video.src = blobUrl;
+            video.src = finalUrl;
             video.controls = true;
-            video.style.display = 'none'; // Hide it from the DOM
-            video.playsInline = false;    // Force iOS to fullscreen
+            video.style.display = 'none'; // Keep it off the DOM to prevent UI compositing stutter
+            video.playsInline = false;    // This forces iOS to intercept and open the native AVPlayer UI
             document.body.appendChild(video);
             
             video.onended = () => {
-                URL.revokeObjectURL(blobUrl);
                 video.remove();
             };
             
             video.onerror = () => {
-                alert("Video element error code: " + (video.error ? video.error.code : 'unknown'));
+                console.error("Video error code:", video.error ? video.error.code : 'unknown');
+                alert("Playback failed. Please ensure the file is not corrupted.");
+                video.remove();
             };
             
-            step = 'play()';
             await video.play();
             
         } catch (err) {
             console.error("Video player error:", err);
-            alert(`Playback failed at step [${step}]. Error: ${err.message}`);
+            alert(`Could not start playback. Error: ${err.message}`);
         }
     };
 });
