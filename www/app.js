@@ -265,17 +265,47 @@ document.addEventListener('DOMContentLoaded', () => {
             const filename = `${item.title.replace(/[^a-z0-9]/gi, '_').substring(0, 50)}_${Date.now()}.${item.format}`;
             let localPath = "";
             
-            // Download invisibly in background via Capacitor
+            // Unbreakable Streaming Downloader: Bypasses iOS URLSession truncation bugs
+            try { await window.Capacitor.Plugins.Filesystem.deleteFile({ directory: 'DATA', path: filename }); } catch(e) {}
+            
             if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) {
-                const result = await window.Capacitor.Plugins.Filesystem.downloadFile({
-                    url: streamUrl,
-                    path: filename,
-                    directory: 'DATA'
-                });
-                // Only store filename, as native iOS absolute paths change on app updates
+                const res = await fetch(streamUrl);
+                if (!res.ok) throw new Error("Download stream rejected");
+                
+                const reader = res.body.getReader();
+                let firstChunk = true;
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    // Convert Uint8Array chunk to base64
+                    let binary = '';
+                    const len = value.byteLength;
+                    for (let i = 0; i < len; i++) {
+                        binary += String.fromCharCode(value[i]);
+                    }
+                    const b64Chunk = window.btoa(binary);
+                    
+                    if (firstChunk) {
+                        await window.Capacitor.Plugins.Filesystem.writeFile({
+                            directory: 'DATA',
+                            path: filename,
+                            data: b64Chunk
+                        });
+                        firstChunk = false;
+                    } else {
+                        await window.Capacitor.Plugins.Filesystem.writeFile({
+                            directory: 'DATA',
+                            path: filename,
+                            data: b64Chunk,
+                            append: true
+                        });
+                    }
+                }
+                
                 localPath = filename;
             } else {
-                // Fallback for desktop browser testing
                 localPath = streamUrl;
             }
 
