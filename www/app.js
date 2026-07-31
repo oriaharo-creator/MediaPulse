@@ -14,9 +14,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- State ---
-    let downloadQueue = [];
-    let myCollection = [];
+    let downloadQueue = JSON.parse(localStorage.getItem('downloadQueue') || '[]');
+    let myCollection = JSON.parse(localStorage.getItem('myCollection') || '[]');
     let currentVideoToQueue = null;
+    
+    setTimeout(() => {
+        if(downloadQueue.length > 0) updateQueueUI();
+        if(myCollection.length > 0) updateCollectionUI();
+    }, 100);
 
     // --- DOM Elements ---
     const searchBtn = document.getElementById('search-btn');
@@ -164,6 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function updateQueueUI() {
+        localStorage.setItem('downloadQueue', JSON.stringify(downloadQueue));
         queueBadge.textContent = downloadQueue.length;
         if (downloadQueue.length === 0) {
             queueList.innerHTML = '<div class="empty-state">Queue is empty.</div>';
@@ -256,7 +262,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     path: filename,
                     directory: 'DATA'
                 });
-                localPath = window.Capacitor.convertFileSrc(result.path);
+                // Only store filename, as native iOS absolute paths change on app updates
+                localPath = filename;
             } else {
                 // Fallback for desktop browser testing
                 localPath = streamUrl;
@@ -284,6 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- File Manager & Local Upload ---
     function updateCollectionUI() {
+        localStorage.setItem('myCollection', JSON.stringify(myCollection));
         if (myCollection.length === 0) {
             filesList.innerHTML = '<div class="empty-state">No downloaded files yet.</div>';
             return;
@@ -342,10 +350,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- Media Player Modal ---
-    window.playMedia = function(index) {
+    window.playMedia = async function(index) {
         const item = myCollection[index];
+        let playUrl = item.url;
+        
+        // Dynamically resolve filename to full local path on iOS
+        if (playUrl && !playUrl.startsWith('http') && !playUrl.startsWith('capacitor://') && !playUrl.startsWith('blob:')) {
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) {
+                const res = await window.Capacitor.Plugins.Filesystem.getUri({ directory: 'DATA', path: playUrl });
+                playUrl = window.Capacitor.convertFileSrc(res.uri);
+            }
+        }
+
         nowPlayingTitle.textContent = item.title;
-        mediaPlayer.src = item.url;
+        mediaPlayer.src = playUrl;
         playerModal.classList.remove('hidden');
         mediaPlayer.play();
     };
