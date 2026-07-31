@@ -293,9 +293,12 @@ document.addEventListener('DOMContentLoaded', () => {
             processNextInQueue();
         } catch (error) {
             console.error(error);
-            item.status = 'Failed: ' + error.message;
+            item.status = 'Retrying in 15s...';
             updateQueueUI();
-            setTimeout(() => processNextInQueue(), 2000);
+            setTimeout(() => {
+                item.status = 'queued';
+                processNextInQueue();
+            }, 15000);
         }
     }
 
