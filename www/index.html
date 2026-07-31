@@ -25,7 +25,12 @@
             <!-- Search View -->
             <section id="search-view" class="view active">
                 <div class="search-container">
-                    <input type="text" id="search-input" placeholder="Search YouTube...">
+                    <div class="search-input-wrapper">
+                        <input type="text" id="search-input" placeholder="Search YouTube...">
+                        <button id="clear-search-btn" class="clear-btn hidden" aria-label="Clear search">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
                     <button id="search-btn" class="btn primary">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                     </button>
@@ -42,7 +47,6 @@
             <section id="queue-view" class="view">
                 <div class="view-header">
                     <h2>Downloads</h2>
-                    <button id="process-queue-btn" class="btn primary small">Process</button>
                 </div>
                 <div class="queue-container" id="queue-list">
                     <div class="empty-state">
@@ -76,7 +80,7 @@
                 <li data-target="queue-view">
                     <div class="icon-container">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        <span id="queue-badge" class="badge">0</span>
+                        <span id="queue-badge" class="badge hidden">0</span>
                     </div>
                     <span>Queue</span>
                 </li>
@@ -87,36 +91,22 @@
             </ul>
         </nav>
 
-
-        <!-- Download Options Modal -->
-        <div id="download-modal" class="modal hidden">
-            <div class="modal-content glass-panel small-modal">
-                <button class="close-btn" id="close-download-modal">
+        <!-- Video Player Modal -->
+        <div id="player-modal" class="modal hidden">
+            <div class="modal-content glass-panel player-panel">
+                <button class="close-btn" id="close-player">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
-                <h3>Download Options</h3>
-                <div class="form-group">
-                    <label>Format</label>
-                    <select id="format-select">
-                        <option value="mp4">Video (.mp4)</option>
-                        <option value="mp3">Audio (.mp3)</option>
-                    </select>
+                <div class="player-container">
+                    <video id="media-player" controls playsinline></video>
                 </div>
-                <div class="form-group" id="quality-group">
-                    <label>Quality</label>
-                    <select id="quality-select">
-                        <option value="1080">1080p</option>
-                        <option value="720">720p (HD)</option>
-                        <option value="480">480p</option>
-                        <option value="360">360p</option>
-                    </select>
-                </div>
-                <button id="add-to-queue-btn" class="btn primary full-width">Add to Queue</button>
+                <h3 id="now-playing-title">Video Title</h3>
             </div>
         </div>
+
     </div>
     
-    <script src="capacitor.js"></script>
+    <div id="toast-container"></div>
     <script src="app.js"></script>
 </body>
 </html>

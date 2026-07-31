@@ -119,16 +119,41 @@ body {
     margin-bottom: 24px;
 }
 
-#search-input {
+.search-input-wrapper {
     flex: 1;
+    position: relative;
+    display: flex;
+}
+
+#search-input {
+    width: 100%;
     background: var(--bg-surface);
     border: 1px solid var(--border-glass);
     border-radius: var(--radius-md);
-    padding: 14px 16px;
+    padding: 14px 40px 14px 16px;
     color: var(--text-primary);
     font-size: 16px;
     outline: none;
     transition: border-color 0.2s ease;
+}
+
+.clear-btn {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+}
+
+.clear-btn.hidden {
+    display: none;
 }
 
 #search-input:focus {
@@ -323,6 +348,10 @@ body {
     border-radius: 10px;
 }
 
+.badge.hidden {
+    display: none;
+}
+
 /* --- Modals --- */
 .modal {
     position: fixed;
@@ -444,4 +473,42 @@ video {
 .view-header h2 {
     font-size: 28px;
     font-weight: 700;
+}
+
+/* --- Toast Notifications --- */
+#toast-container {
+    position: fixed;
+    bottom: calc(var(--tab-bar-height) + var(--safe-area-bottom) + 20px);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.toast {
+    background: var(--bg-glass);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border-glass);
+    color: var(--text-primary);
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    animation: slideUpFade 0.3s ease, fadeOut 0.3s ease 2.7s forwards;
+}
+
+@keyframes slideUpFade {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
 }

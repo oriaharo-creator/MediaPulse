@@ -19,37 +19,28 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentVideoToQueue = null;
     
     setTimeout(() => {
-        if(downloadQueue.length > 0) {
-            // Reset any downloads that were interrupted during the last session
-            downloadQueue.forEach(item => {
-                if (item.status === 'downloading...') item.status = 'queued';
-            });
-            updateQueueUI();
-            
-            // Auto-process queue on boot up
-            processNextInQueue();
-        }
+        if(downloadQueue.length > 0) updateQueueUI();
         if(myCollection.length > 0) updateCollectionUI();
     }, 100);
 
     // --- DOM Elements ---
     const searchBtn = document.getElementById('search-btn');
     const searchInput = document.getElementById('search-input');
+    const clearSearchBtn = document.getElementById('clear-search-btn');
     const resultsList = document.getElementById('results-list');
     
-    const downloadModal = document.getElementById('download-modal');
-    const closeDownloadModal = document.getElementById('close-download-modal');
-    const formatSelect = document.getElementById('format-select');
-    const qualityGroup = document.getElementById('quality-group');
-    const addToQueueBtn = document.getElementById('add-to-queue-btn');
     const queueList = document.getElementById('queue-list');
     const queueBadge = document.getElementById('queue-badge');
-    const processQueueBtn = document.getElementById('process-queue-btn');
-
+    
+    // Bottom Nav
+    const navItems = document.querySelectorAll('.nav-item');
     const filesList = document.getElementById('files-list');
     const localUpload = document.getElementById('local-upload');
 
-
+    const playerModal = document.getElementById('player-modal');
+    const closePlayer = document.getElementById('close-player');
+    const mediaPlayer = document.getElementById('media-player');
+    const nowPlayingTitle = document.getElementById('now-playing-title');
 
     // --- APIs ---
     
@@ -94,7 +85,39 @@ document.addEventListener('DOMContentLoaded', () => {
         'https://cobalt.q0.pm'
     ];
 
+    // --- Toast Notifications ---
+    function showToast(message) {
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = message;
+        container.appendChild(toast);
+        
+        setTimeout(() => {
+            if (toast.parentNode) toast.parentNode.removeChild(toast);
+        }, 3000);
+    }
+
     // --- Search Logic ---
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') searchBtn.click();
+    });
+
+    searchInput.addEventListener('input', () => {
+        if (searchInput.value.length > 0) {
+            clearSearchBtn.classList.remove('hidden');
+        } else {
+            clearSearchBtn.classList.add('hidden');
+        }
+    });
+
+    clearSearchBtn.addEventListener('click', () => {
+        searchInput.value = '';
+        clearSearchBtn.classList.add('hidden');
+        searchInput.focus();
+    });
+
     searchBtn.addEventListener('click', async () => {
         const query = searchInput.value.trim();
         if (!query) return;
@@ -129,8 +152,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="card-info">
                     <div class="card-title" title="${video.title}">${video.title}</div>
                     <div class="card-meta">YouTube Video</div>
-                    <div class="card-actions">
-                        <button class="download-action" onclick="openDownloadModal('${video.id}', '${video.title.replace(/'/g, "\\'")}', '${video.thumb}')">Download</button>
+                    <div class="card-actions" style="display:flex; gap:8px; margin-top:8px;">
+                        <button class="download-action btn primary" style="flex:1; padding:6px;" onclick="addToQueue('${video.id}', '${video.title.replace(/'/g, "\\'")}', '${video.thumb}', 'mp4')">🎬 MP4</button>
+                        <button class="download-action btn primary" style="flex:1; padding:6px;" onclick="addToQueue('${video.id}', '${video.title.replace(/'/g, "\\'")}', '${video.thumb}', 'mp3')">🎵 MP3</button>
                     </div>
                 </div>
             `;
@@ -138,48 +162,34 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- Download Modal & Queue Logic ---
-    window.openDownloadModal = function(id, title, thumb) {
-        currentVideoToQueue = { id, title, thumb };
-        downloadModal.classList.remove('hidden');
-    };
-
-    closeDownloadModal.addEventListener('click', () => {
-        downloadModal.classList.add('hidden');
-        currentVideoToQueue = null;
-    });
-
-    formatSelect.addEventListener('change', (e) => {
-        if (e.target.value === 'mp3') {
-            qualityGroup.style.display = 'none';
-        } else {
-            qualityGroup.style.display = 'block';
-        }
-    });
-
-    addToQueueBtn.addEventListener('click', () => {
-        if (!currentVideoToQueue) return;
-        
-        const format = formatSelect.value;
-        const quality = format === 'mp4' ? document.getElementById('quality-select').value + 'p' : 'Audio';
+    // --- Queue Logic ---
+    window.addToQueue = function(id, title, thumb, format) {
+        const quality = format === 'mp4' ? '720p' : 'Audio';
         
         downloadQueue.push({
-            ...currentVideoToQueue,
+            id, title, thumb,
             format,
             quality,
             status: 'queued'
         });
         
         updateQueueUI();
-        downloadModal.classList.add('hidden');
-    });
+        showToast(`Added ${format.toUpperCase()} to queue`);
+
+        if (!downloadQueue.some(item => item.status === 'downloading...')) {
+            processNextInQueue();
+        }
+    };
 
     function updateQueueUI() {
         localStorage.setItem('downloadQueue', JSON.stringify(downloadQueue));
         queueBadge.textContent = downloadQueue.length;
         if (downloadQueue.length === 0) {
+            queueBadge.classList.add('hidden');
             queueList.innerHTML = '<div class="empty-state"><div class="empty-icon">📥</div><p>Queue is empty</p></div>';
             return;
+        } else {
+            queueBadge.classList.remove('hidden');
         }
 
         queueList.innerHTML = '';
@@ -208,10 +218,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Real Downloading Logic ---
-    processQueueBtn.addEventListener('click', () => {
-        if (downloadQueue.length === 0) return;
-        processNextInQueue();
-    });
 
     async function getDownloadUrl(videoId, formatStr, qualityStr) {
         const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
@@ -237,8 +243,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (progData.success === 1 && progData.download_url) {
                 return progData.download_url;
             } else if (progData.success === 0) {
-                // Still processing, wait 15 seconds to avoid rate limits
-                await new Promise(r => setTimeout(r, 15000));
+                // Still processing, wait 2 seconds
+                await new Promise(r => setTimeout(r, 2000));
             } else {
                 throw new Error("Loader.to conversion failed");
             }
@@ -249,7 +255,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function processNextInQueue() {
         const nextIndex = downloadQueue.findIndex(item => item.status === 'queued');
         if (nextIndex === -1) {
-            alert('Queue processing complete!');
             return;
         }
 
@@ -265,50 +270,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const filename = `${item.title.replace(/[^a-z0-9]/gi, '_').substring(0, 50)}_${Date.now()}.${item.format}`;
             let localPath = "";
             
-            // Unbreakable Streaming Downloader: Bypasses iOS URLSession truncation bugs
-            try { await window.Capacitor.Plugins.Filesystem.deleteFile({ directory: 'DATA', path: filename }); } catch(e) {}
-            
+            // Download invisibly in background via Capacitor
             if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) {
-                const res = await fetch(streamUrl);
-                if (!res.ok) throw new Error("Download stream rejected");
-                
-                const reader = res.body.getReader();
-                let firstChunk = true;
-                
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    
-                    // Convert Uint8Array chunk to base64 natively using WebKit FileReader
-                    const blob = new Blob([value]);
-                    const b64Chunk = await new Promise((resolve) => {
-                        const r = new FileReader();
-                        r.onload = () => resolve(r.result.split(',')[1]);
-                        r.readAsDataURL(blob);
-                    });
-                    
-                    if (firstChunk) {
-                        await window.Capacitor.Plugins.Filesystem.writeFile({
-                            directory: 'DATA',
-                            path: filename,
-                            data: b64Chunk
-                        });
-                        firstChunk = false;
-                    } else {
-                        await window.Capacitor.Plugins.Filesystem.appendFile({
-                            directory: 'DATA',
-                            path: filename,
-                            data: b64Chunk
-                        });
-                    }
-                }
-                
+                const result = await window.Capacitor.Plugins.Filesystem.downloadFile({
+                    url: streamUrl,
+                    path: filename,
+                    directory: 'DATA'
+                });
+                // Only store filename, as native iOS absolute paths change on app updates
                 localPath = filename;
             } else {
+                // Fallback for desktop browser testing
                 localPath = streamUrl;
             }
 
             item.status = 'done';
+            showToast('Download complete!');
             
             myCollection.push({
                 ...item,
@@ -322,12 +299,10 @@ document.addEventListener('DOMContentLoaded', () => {
             processNextInQueue();
         } catch (error) {
             console.error(error);
-            item.status = 'Retrying in 15s...';
+            item.status = 'Failed: ' + error.message;
+            showToast('Download failed');
             updateQueueUI();
-            setTimeout(() => {
-                item.status = 'queued';
-                processNextInQueue();
-            }, 15000);
+            setTimeout(() => processNextInQueue(), 2000);
         }
     }
 
@@ -391,58 +366,40 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCollectionUI();
     });
 
-    // --- Video Player (Native Scheme + Fullscreen Fallback) ---
+    // --- Media Player Modal ---
     window.playMedia = async function(index) {
         const item = myCollection[index];
         let playUrl = item.url;
         
-        try {
-            let finalUrl = playUrl;
-            
-            // If it's a locally downloaded file, get its Capacitor URI
-            if (playUrl && !playUrl.startsWith('http') && !playUrl.startsWith('blob:')) {
-                const uriResult = await window.Capacitor.Plugins.Filesystem.getUri({
-                    directory: 'DATA',
-                    path: playUrl
-                });
-                finalUrl = window.Capacitor.convertFileSrc(uriResult.uri);
+        // Dynamically resolve filename to full local path on iOS
+        if (playUrl && !playUrl.startsWith('http') && !playUrl.startsWith('capacitor://') && !playUrl.startsWith('blob:')) {
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) {
+                const res = await window.Capacitor.Plugins.Filesystem.getUri({ directory: 'DATA', path: playUrl });
+                playUrl = window.Capacitor.convertFileSrc(res.uri);
             }
-            
-            const video = document.createElement('video');
-            video.src = finalUrl;
-            video.controls = true;
-            video.style.display = 'none'; 
-            video.playsInline = false;    
-            document.body.appendChild(video);
-            
-            const debugLog = [];
-            const addLog = (msg) => { debugLog.push(msg); console.log("Video Debug:", msg); };
-            
-            video.addEventListener('loadstart', () => addLog('loadstart'));
-            video.addEventListener('loadedmetadata', () => addLog(`metadata(${video.videoWidth}x${video.videoHeight}, ${video.duration}s)`));
-            video.addEventListener('loadeddata', () => addLog('loadeddata'));
-            video.addEventListener('playing', () => addLog('playing'));
-            video.addEventListener('stalled', () => addLog('stalled'));
-            video.addEventListener('waiting', () => addLog('waiting'));
-            video.addEventListener('suspend', () => addLog('suspend'));
-            
-            video.onended = () => {
-                alert(`Video Ended! File Duration: ${video.duration}s. Debug Log: ` + debugLog.join(" -> "));
-                video.remove();
-            };
-            
-            video.onerror = () => {
-                const err = video.error;
-                let msg = `Video Error Code: ${err ? err.code : 'unknown'}. Message: ${err ? err.message : 'none'}.`;
-                alert(msg + `\nDebug Log: ` + debugLog.join(" -> "));
-                video.remove();
-            };
-            
-            await video.play();
-            
-        } catch (err) {
-            console.error("Video player error:", err);
-            alert(`Could not start playback. Error: ${err.message}`);
         }
+
+        nowPlayingTitle.textContent = item.title;
+        mediaPlayer.src = playUrl;
+        playerModal.classList.remove('hidden');
+        mediaPlayer.play();
     };
+
+    closePlayer.addEventListener('click', () => {
+        mediaPlayer.pause();
+        mediaPlayer.src = '';
+        playerModal.classList.add('hidden');
+    });
+
+    // Close modals on clicking outside
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(m => {
+        m.addEventListener('click', (e) => {
+            if (e.target === m) {
+                if (!m.classList.contains('hidden')) {
+                    if (m.id === 'player-modal') closePlayer.click();
+                }
+            }
+        });
+    });
 });
