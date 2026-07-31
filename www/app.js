@@ -354,24 +354,34 @@ document.addEventListener('DOMContentLoaded', () => {
     window.playMedia = async function(index) {
         const item = myCollection[index];
         let playUrl = item.url;
+        let step = 'init';
         
         try {
-            // Read file into base64
-            const fileData = await window.Capacitor.Plugins.Filesystem.readFile({
+            step = 'getUri';
+            const uriResult = await window.Capacitor.Plugins.Filesystem.getUri({
                 directory: 'DATA',
                 path: playUrl
             });
             
-            // Convert base64 to Blob URL
-            const res = await fetch(`data:video/mp4;base64,${fileData.data}`);
-            const blob = await res.blob();
+            step = 'convertFileSrc';
+            const capUrl = window.Capacitor.convertFileSrc(uriResult.uri);
+            
+            step = 'fetch Blob';
+            const response = await fetch(capUrl);
+            if (!response.ok) throw new Error("Fetch failed: " + response.statusText);
+            
+            step = 'blob()';
+            const blob = await response.blob();
+            
+            step = 'createObjectURL';
             const blobUrl = URL.createObjectURL(blob);
             
-            // Create a video element and play it (iOS will auto-fullscreen it)
+            step = 'video DOM setup';
             const video = document.createElement('video');
             video.src = blobUrl;
             video.controls = true;
             video.style.display = 'none'; // Hide it from the DOM
+            video.playsInline = false;    // Force iOS to fullscreen
             document.body.appendChild(video);
             
             video.onended = () => {
@@ -379,14 +389,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 video.remove();
             };
             
-            video.play().catch(err => {
-                console.error(err);
-                alert("Playback failed.");
-            });
+            video.onerror = () => {
+                alert("Video element error code: " + (video.error ? video.error.code : 'unknown'));
+            };
+            
+            step = 'play()';
+            await video.play();
             
         } catch (err) {
             console.error("Video player error:", err);
-            alert("Could not play video. Error: " + err.message);
+            alert(`Playback failed at step [${step}]. Error: ${err.message}`);
         }
     };
 });
