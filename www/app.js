@@ -207,10 +207,14 @@ document.addEventListener('DOMContentLoaded', () => {
         processNextInQueue();
     });
 
-    async function getDownloadUrl(videoId, formatStr) {
+    async function getDownloadUrl(videoId, formatStr, qualityStr) {
         const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-        // Map app format to loader.to format
-        const apiFormat = formatStr === 'mp4' ? '1080' : 'mp3';
+        
+        let apiFormat = 'mp3';
+        if (formatStr === 'mp4') {
+            // loader.to uses '720', '480', etc. Remove 'p' if it exists.
+            apiFormat = qualityStr ? qualityStr.replace('p', '') : '720';
+        }
         
         const initRes = await fetch(`https://loader.to/ajax/download.php?format=${apiFormat}&url=${encodeURIComponent(ytUrl)}`);
         const initData = await initRes.json();
@@ -249,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // Get final download link from loader.to
-            const streamUrl = await getDownloadUrl(item.id, item.format);
+            const streamUrl = await getDownloadUrl(item.id, item.format, item.quality);
             if(!streamUrl) throw new Error("Could not fetch stream URL");
 
             const filename = `${item.title.replace(/[^a-z0-9]/gi, '_').substring(0, 50)}_${Date.now()}.${item.format}`;
