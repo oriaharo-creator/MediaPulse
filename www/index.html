@@ -105,6 +105,33 @@
         </div>
 
     </div>
+
+    <!-- Download Options Modal -->
+    <div id="download-modal" class="modal hidden">
+        <div class="modal-content glass-panel small-modal">
+            <button class="close-btn" id="close-download-modal">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <h3>Download Options</h3>
+            <div class="form-group">
+                <label>Format</label>
+                <select id="format-select">
+                    <option value="mp4">Video (.mp4)</option>
+                    <option value="mp3">Audio (.mp3)</option>
+                </select>
+            </div>
+            <div class="form-group" id="quality-group">
+                <label>Quality</label>
+                <select id="quality-select">
+                    <option value="1080">1080p (FHD)</option>
+                    <option value="720" selected>720p (HD)</option>
+                    <option value="480">480p</option>
+                    <option value="360">360p</option>
+                </select>
+            </div>
+            <button id="add-to-queue-btn" class="btn primary full-width">Add to Queue</button>
+        </div>
+    </div>
     
     <div id="toast-container"></div>
     <script src="app.js"></script>

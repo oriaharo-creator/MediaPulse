@@ -29,6 +29,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearSearchBtn = document.getElementById('clear-search-btn');
     const resultsList = document.getElementById('results-list');
     
+    const downloadModal = document.getElementById('download-modal');
+    const closeDownloadModal = document.getElementById('close-download-modal');
+    const formatSelect = document.getElementById('format-select');
+    const qualityGroup = document.getElementById('quality-group');
+    const addToQueueBtn = document.getElementById('add-to-queue-btn');
+    
     const queueList = document.getElementById('queue-list');
     const queueBadge = document.getElementById('queue-badge');
     
@@ -152,9 +158,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="card-info">
                     <div class="card-title" title="${video.title}">${video.title}</div>
                     <div class="card-meta">YouTube Video</div>
-                    <div class="card-actions" style="display:flex; gap:8px; margin-top:8px;">
-                        <button class="download-action btn primary" style="flex:1; padding:6px;" onclick="addToQueue('${video.id}', '${video.title.replace(/'/g, "\\'")}', '${video.thumb}', 'mp4')">🎬 MP4</button>
-                        <button class="download-action btn primary" style="flex:1; padding:6px;" onclick="addToQueue('${video.id}', '${video.title.replace(/'/g, "\\'")}', '${video.thumb}', 'mp3')">🎵 MP3</button>
+                    <div class="card-actions">
+                        <button class="download-action btn primary" onclick="openDownloadModal('${video.id}', '${video.title.replace(/'/g, "\\'")}', '${video.thumb}')">Download</button>
                     </div>
                 </div>
             `;
@@ -162,24 +167,46 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- Queue Logic ---
-    window.addToQueue = function(id, title, thumb, format) {
-        const quality = format === 'mp4' ? '720p' : 'Audio';
+    // --- Download Modal & Queue Logic ---
+    window.openDownloadModal = function(id, title, thumb) {
+        currentVideoToQueue = { id, title, thumb };
+        downloadModal.classList.remove('hidden');
+    };
+
+    closeDownloadModal.addEventListener('click', () => {
+        downloadModal.classList.add('hidden');
+        currentVideoToQueue = null;
+    });
+
+    formatSelect.addEventListener('change', (e) => {
+        if (e.target.value === 'mp3') {
+            qualityGroup.style.display = 'none';
+        } else {
+            qualityGroup.style.display = 'block';
+        }
+    });
+
+    addToQueueBtn.addEventListener('click', () => {
+        if (!currentVideoToQueue) return;
+        
+        const format = formatSelect.value;
+        const quality = format === 'mp4' ? document.getElementById('quality-select').value + 'p' : 'Audio';
         
         downloadQueue.push({
-            id, title, thumb,
+            ...currentVideoToQueue,
             format,
             quality,
             status: 'queued'
         });
         
         updateQueueUI();
-        showToast(`Added ${format.toUpperCase()} to queue`);
+        downloadModal.classList.add('hidden');
+        showToast('Added to queue');
 
         if (!downloadQueue.some(item => item.status === 'downloading...')) {
             processNextInQueue();
         }
-    };
+    });
 
     function updateQueueUI() {
         localStorage.setItem('downloadQueue', JSON.stringify(downloadQueue));
@@ -195,16 +222,30 @@ document.addEventListener('DOMContentLoaded', () => {
         queueList.innerHTML = '';
         downloadQueue.forEach((item, index) => {
             const card = document.createElement('div');
-            card.className = 'card';
+            const isProcessing = item.status === 'downloading...';
+            const progressHtml = isProcessing ? `
+                <div class="progress-bar-container">
+                    <div class="progress-bar indeterminate"></div>
+                </div>
+            ` : '';
+
+            card.className = 'card queue-card ' + (isProcessing ? 'active-task' : '');
             card.innerHTML = `
-                <div class="card-thumb">
+                <div class="card-thumb queue-thumb">
                     <img src="${item.thumb}" alt="Thumbnail">
+                    ${isProcessing ? '<div class="processing-overlay"><div class="spinner"></div></div>' : ''}
                 </div>
                 <div class="card-info">
                     <div class="card-title">${item.title}</div>
-                    <div class="card-meta">${item.format.toUpperCase()} • ${item.quality} • Status: ${item.status}</div>
-                    <div class="card-actions">
-                        <button onclick="removeFromQueue(${index})">Remove</button>
+                    <div class="card-meta queue-meta">
+                        <span><span class="badge format-${item.format}">${item.format.toUpperCase()}</span> ${item.quality}</span>
+                        <span class="status-text ${isProcessing ? 'pulse-text' : ''}">${item.status}</span>
+                    </div>
+                    ${progressHtml}
+                    <div class="card-actions queue-actions">
+                        <button class="btn danger-outline" onclick="removeFromQueue(${index})">
+                            Cancel
+                        </button>
                     </div>
                 </div>
             `;
@@ -398,6 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.target === m) {
                 if (!m.classList.contains('hidden')) {
                     if (m.id === 'player-modal') closePlayer.click();
+                    else if (m.id === 'download-modal') closeDownloadModal.click();
                 }
             }
         });
