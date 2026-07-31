@@ -357,21 +357,30 @@ document.addEventListener('DOMContentLoaded', () => {
         let step = 'init';
         
         try {
-            step = 'getUri';
-            const uriResult = await window.Capacitor.Plugins.Filesystem.getUri({
+            step = 'readFile';
+            const fileData = await window.Capacitor.Plugins.Filesystem.readFile({
                 directory: 'DATA',
                 path: playUrl
             });
             
-            step = 'convertFileSrc';
-            const capUrl = window.Capacitor.convertFileSrc(uriResult.uri);
+            step = 'base64 decode';
+            // Convert base64 to Blob directly in JS to bypass WebKit fetch limits
+            const b64Data = fileData.data;
+            const byteCharacters = atob(b64Data);
+            const byteArrays = [];
             
-            step = 'fetch Blob';
-            const response = await fetch(capUrl);
-            if (!response.ok) throw new Error("Fetch failed: " + response.statusText);
+            for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+                const slice = byteCharacters.slice(offset, offset + 512);
+                const byteNumbers = new Array(slice.length);
+                for (let i = 0; i < slice.length; i++) {
+                    byteNumbers[i] = slice.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                byteArrays.push(byteArray);
+            }
             
             step = 'blob()';
-            const blob = await response.blob();
+            const blob = new Blob(byteArrays, { type: 'video/mp4' });
             
             step = 'createObjectURL';
             const blobUrl = URL.createObjectURL(blob);
